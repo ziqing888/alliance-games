@@ -1,37 +1,30 @@
 #!/bin/bash
 
-# 定义文本格式
-BOLD=$(tput bold)
-NORMAL=$(tput sgr0)
-SUCCESS_COLOR='\033[1;32m' # 绿色
-ERROR_COLOR='\033[1;31m'   # 红色
-INFO_COLOR='\033[1;36m'    # 青色
-MENU_COLOR='\033[1;34m'    # 蓝色
-NC='\033[0m'               # 无颜色
+# 定义颜色代码
+INFO='\033[0;36m'  # 青色
+WARNING='\033[0;33m'  # 警告黄色
+ERROR='\033[0;31m'  # 错误红色
+SUCCESS='\033[0;32m'  # 成功绿色
+MENU_COLOR='\033[0;34m'  # 蓝色
+BOLD='\033[1m'  # 加粗
+NC='\033[0m'  # 无颜色
 
 # 显示横幅
-echo -e "${MENU_COLOR}${BOLD}==============================================${NORMAL}"
-echo -e "${MENU_COLOR}${BOLD}      联盟游戏 Docker 安装脚本 v2.0            ${NORMAL}"
-echo -e "${MENU_COLOR}${BOLD}      由 子清 提供         ${NORMAL}"
+echo -e "${MENU_COLOR}${BOLD}==============================================${NC}"
+echo -e "${MENU_COLOR}${BOLD}      联盟游戏 Docker 安装脚本 v2.0            ${NC}"
+echo -e "${MENU_COLOR}${BOLD}      由 子清 提供                             ${NC}"
 echo -e "${MENU_COLOR}${BOLD}==============================================${NC}"
 
 # 自定义状态显示函数
-show_message() {
-    local message="$1"
-    local status="$2"
-    case $status in
-        "error")
-            echo -e "${ERROR_COLOR}${BOLD}❌ 错误: ${message}${NORMAL}"
-            ;;
-        "info")
-            echo -e "${INFO_COLOR}${BOLD}ℹ️ 信息: ${message}${NORMAL}"
-            ;;
-        "success")
-            echo -e "${SUCCESS_COLOR}${BOLD}✅ 成功: ${message}${NORMAL}"
-            ;;
-        *)
-            echo -e "${message}"
-            ;;
+log_message() {
+    local type="$1"
+    local message="$2"
+    case "$type" in
+        INFO) echo -e "${INFO}[INFO] ${message}${NC}" ;;
+        WARNING) echo -e "${WARNING}[WARNING] ${message}${NC}" ;;
+        ERROR) echo -e "${ERROR}[ERROR] ${message}${NC}" ;;
+        SUCCESS) echo -e "${SUCCESS}[SUCCESS] ${message}${NC}" ;;
+        *) echo "[UNKNOWN] ${message}" ;;
     esac
 }
 
@@ -42,132 +35,91 @@ get_non_empty_input() {
     while [ -z "$input" ]; do
         read -p "$prompt" input
         if [ -z "$input" ]; then
-            show_message "此字段不能为空，请重新输入。" "error"
+            log_message "ERROR" "此字段不能为空。"
         fi
     done
     echo "$input"
 }
 
-# 生成随机 MAC 地址
+# 生成随机 MAC 地址的函数
 generate_mac_address() {
     echo "02:$(od -An -N5 -tx1 /dev/urandom | tr ' ' ':' | cut -c2-)"
 }
 
-# 生成虚拟 UUID
+# 生成 UUID 的函数
 generate_uuid() {
     cat /proc/sys/kernel/random/uuid
 }
 
-# 获取设备名称
-device_name=$(get_non_empty_input "请输入设备名称：")
+# 创建 Docker 容器的函数
+create_container() {
+    local device_name=$(get_non_empty_input "输入设备名称：")
+    local device_dir="./$device_name"
 
-# 创建设备目录
-device_dir="./$device_name"
-if [ ! -d "$device_dir" ]; then
-    mkdir "$device_dir"
-    show_message "已为设备 '$device_name' 创建目录：$device_dir" "info"
-fi
-
-# 询问是否使用代理
-read -p "是否使用代理？(Y/N): " use_proxy
-
-proxy_type=""
-proxy_ip=""
-proxy_port=""
-proxy_username=""
-proxy_password=""
-
-# 如果选择使用代理，则获取代理信息
-if [[ "$use_proxy" == "Y" || "$use_proxy" == "y" ]]; then
-    read -p "请输入代理类型 (http/socks5): " proxy_type
-    read -p "请输入代理 IP: " proxy_ip
-    read -p "请输入代理端口: " proxy_port
-    read -p "请输入代理用户名 (若无则留空): " proxy_username
-    read -p "请输入代理密码 (若无则留空): " proxy_password
-    if [[ "$proxy_type" == "http" ]]; then
-        proxy_type="http-connect"
+    if [ ! -d "$device_dir" ]; then
+        mkdir "$device_dir"
+        log_message "INFO" "已为 $device_name 创建目录：$device_dir"
     fi
-fi
 
-# 创建 Dockerfile
-show_message "正在创建 Dockerfile..." "info"
-cat <<EOL > "$device_dir/Dockerfile"
-FROM ubuntu:latest
-WORKDIR /app
-RUN apt-get update && apt-get install -y bash curl jq make gcc bzip2 lbzip2 vim git lz4 telnet build-essential net-tools wget tcpdump systemd dbus redsocks iptables iproute2 nano
-RUN curl -L https://github.com/Impa-Ventures/coa-launch-binaries/raw/main/linux/amd64/compute/launcher -o launcher && \
-    curl -L https://github.com/Impa-Ventures/coa-launch-binaries/raw/main/linux/amd64/compute/worker -o worker
-RUN chmod +x ./launcher && chmod +x ./worker
-EOL
+    local fake_product_uuid_file="$device_dir/fake_uuid.txt"
+    if [ ! -f "$fake_product_uuid_file" ]; then
+        echo "$(generate_uuid)" > "$fake_product_uuid_file"
+    fi
 
-# 如果使用代理，追加 redsocks 配置和 entrypoint 脚本
-if [[ "$use_proxy" == "Y" || "$use_proxy" == "y" ]]; then
-    cat <<EOL >> "$device_dir/Dockerfile"
-COPY redsocks.conf /etc/redsocks.conf
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-EOL
+    local mac_address=$(generate_mac_address)
+    log_message "INFO" "使用生成的 MAC 地址：$mac_address"
 
-    # 创建 redsocks 配置文件
-    cat <<EOL > "$device_dir/redsocks.conf"
-base {
-    log_debug = off;
-    log_info = on;
-    log = "file:/var/log/redsocks.log";
-    daemon = on;
-    redirector = iptables;
+    device_name_lower=$(echo "$device_name" | tr '[:upper:]' '[:lower:]')
+    log_message "INFO" "正在构建 Docker 镜像 '$device_name_lower'..."
+    docker build -t "$device_name_lower" "$device_dir"
+
+    log_message "SUCCESS" "Docker 容器 '$device_name' 已成功创建。"
 }
 
-redsocks {
-    local_ip = 127.0.0.1;
-    local_port = 12345;
-    ip = $proxy_ip;
-    port = $proxy_port;
-    type = $proxy_type;
-EOL
+# 启动 Docker 容器的函数
+start_container() {
+    local container_name=$(get_non_empty_input "输入要启动的容器名称：")
+    log_message "INFO" "启动 Docker 容器 '$container_name'..."
+    docker start -i "$container_name"
+}
 
-    if [[ -n "$proxy_username" ]]; then
-        echo "    login = \"$proxy_username\";" >> "$device_dir/redsocks.conf"
-    fi
+# 停止 Docker 容器的函数
+stop_container() {
+    local container_name=$(get_non_empty_input "输入要停止的容器名称：")
+    log_message "INFO" "停止 Docker 容器 '$container_name'..."
+    docker stop "$container_name"
+}
 
-    if [[ -n "$proxy_password" ]]; then
-        echo "    password = \"$proxy_password\";" >> "$device_dir/redsocks.conf"
-    fi
+# 删除 Docker 容器的函数
+delete_container() {
+    local container_name=$(get_non_empty_input "输入要删除的容器名称：")
+    log_message "WARNING" "即将删除 Docker 容器 '$container_name'..."
+    docker rm "$container_name"
+    log_message "SUCCESS" "Docker 容器 '$container_name' 已删除。"
+}
 
-    echo "}" >> "$device_dir/redsocks.conf"
+# 主菜单
+main_menu() {
+    while true; do
+        echo -e "\n${MENU_COLOR}${BOLD}======== 主菜单 ========${NC}"
+        echo "1) 创建 Docker 容器"
+        echo "2) 启动 Docker 容器"
+        echo "3) 停止 Docker 容器"
+        echo "4) 删除 Docker 容器"
+        echo "5) 退出"
+        echo -n "选择操作: "
 
-    # 创建 entrypoint.sh
-    cat <<EOL > "$device_dir/entrypoint.sh"
-#!/bin/sh
-redsocks -c /etc/redsocks.conf &
-sleep 5
-iptables -t nat -A OUTPUT -p tcp --dport 80 -j REDIRECT --to-ports 12345
-iptables -t nat -A OUTPUT -p tcp --dport 443 -j REDIRECT --to-ports 12345
-exec "\$@"
-EOL
-fi
+        read choice
+        case $choice in
+            1) create_container ;;
+            2) start_container ;;
+            3) stop_container ;;
+            4) delete_container ;;
+            5) log_message "INFO" "退出程序。"; exit 0 ;;
+            *) log_message "ERROR" "无效选项，请重试。" ;;
+        esac
+    done
+}
 
-# 生成虚拟 UUID
-fake_product_uuid_file="$device_dir/fake_uuid.txt"
-if [ ! -f "$fake_product_uuid_file" ]; then
-    generated_uuid=$(generate_uuid)
-    echo "$generated_uuid" > "$fake_product_uuid_file"
-    show_message "生成的虚拟 UUID: $generated_uuid" "info"
-fi
-
-# 生成随机 MAC 地址
-mac_address=$(generate_mac_address)
-show_message "生成的 MAC 地址：$mac_address" "info"
-
-# 将设备名称转换为小写
-device_name_lower=$(echo "$device_name" | tr '[:upper:]' '[:lower:]')
-
-# 构建 Docker 镜像
-show_message "正在构建 Docker 镜像 '$device_name_lower'..." "info"
-docker build -t "$device_name_lower" "$device_dir"
-
-# 显示成功消息并提示用户下一步操作
-show_message "容器 '${device_name}' 已成功设置。" "success"
-show_message "请在终端输入以下命令以启动容器：" "info"
-echo -e "${MENU_COLOR}docker run -it --mac-address=\"$mac_address\" -v \"$fake_product_uuid_file:/sys/class/dmi/id/product_uuid\" --name=\"$device_name\" \"$device_name_lower\"${NC}"
+# 启动主菜单
+main_menu
