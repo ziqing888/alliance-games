@@ -11,8 +11,8 @@ NC='\033[0m'  # 无颜色
 
 # 显示横幅
 echo -e "${MENU_COLOR}${BOLD}==============================================${NC}"
-echo -e "${MENU_COLOR}${BOLD}      联盟游戏 Docker 安装脚本 v2.0            ${NC}"
-echo -e "${MENU_COLOR}${BOLD}      由 子清 提供                             ${NC}"
+echo -e "${MENU_COLOR}${BOLD}      联盟游戏 Docker 安装脚本                  ${NC}"
+echo -e "${MENU_COLOR}${BOLD}      由 子清 提供 @qklxsqf                     ${NC}"
 echo -e "${MENU_COLOR}${BOLD}==============================================${NC}"
 
 # 确保输入非空的函数
