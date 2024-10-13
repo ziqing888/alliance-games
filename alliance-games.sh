@@ -105,53 +105,6 @@ cat <<EOL >> "$device_dir/Dockerfile"
 CMD ["/bin/bash", "-c", "exec /bin/bash"]
 EOL
 
-# 创建 redsocks 配置（如启用代理）
-if [[ "$use_proxy" == "Y" || "$use_proxy" == "y" ]]; then
-    cat <<EOL > "$device_dir/redsocks.conf"
-base {
-    log_debug = off;
-    log_info = on;
-    log = "file:/var/log/redsocks.log";
-    daemon = on;
-    redirector = iptables;
-}
-
-redsocks {
-    local_ip = 127.0.0.1;
-    local_port = 12345;
-    ip = $proxy_ip;
-    port = $proxy_port;
-    type = $proxy_type;
-EOL
-
-    if [[ -n "$proxy_username" ]]; then
-        echo "    login = \"$proxy_username\";" >> "$device_dir/redsocks.conf"
-    fi
-
-    if [[ -n "$proxy_password" ]]; then
-        echo "    password = \"$proxy_password\";" >> "$device_dir/redsocks.conf"
-    fi
-
-    echo "}" >> "$device_dir/redsocks.conf"
-
-    cat <<EOL > "$device_dir/entrypoint.sh"
-#!/bin/sh
-
-echo "启动 redsocks..."
-redsocks -c /etc/redsocks.conf &
-echo "redsocks 已启动。"
-
-sleep 5
-
-echo "配置 iptables..."
-iptables -t nat -A OUTPUT -p tcp --dport 80 -j REDIRECT --to-ports 12345
-iptables -t nat -A OUTPUT -p tcp --dport 443 -j REDIRECT --to-ports 12345
-echo "iptables 配置完成。"
-
-exec "\$@"
-EOL
-fi
-
 # 生成虚拟 UUID 并存入文件
 fake_product_uuid_file="$device_dir/fake_uuid.txt"
 if [ ! -f "$fake_product_uuid_file" ]; then
@@ -170,15 +123,9 @@ device_name_lower=$(echo "$device_name" | tr '[:upper:]' '[:lower:]')
 show_message "正在构建 Docker 镜像 '$device_name_lower'..." "info"
 docker build -t "$device_name_lower" "$device_dir"
 
+# 打印成功消息和下一步提示
 show_message "容器 '${device_name}' 已成功设置。" "success"
-
-# 运行 Docker 容器
-if [[ "$use_proxy" == "Y" || "$use_proxy" == "y" ]]; then
-    docker run -it --cap-add=NET_ADMIN --mac-address="$mac_address" \
-    -v "$fake_product_uuid_file:/sys/class/dmi/id/product_uuid" \
-    --name="$device_name" "$device_name_lower"
-else
-    docker run -it --mac-address="$mac_address" \
-    -v "$fake_product_uuid_file:/sys/class/dmi/id/product_uuid" \
-    --name="$device_name" "$device_name_lower"
-fi
+show_message "现在请在终端输入以下命令来启动容器：" "info"
+echo -e "${MENU_COLOR}docker run -it --mac-address=\"$mac_address\" \\
+-v \"$fake_product_uuid_file:/sys/class/dmi/id/product_uuid\" \\
+--name=\"$device_name\" \"$device_name_lower\"${NORMAL}"
