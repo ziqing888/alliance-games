@@ -7,6 +7,13 @@ SUCCESS_COLOR='\033[1;32m' # 绿色
 ERROR_COLOR='\033[1;31m'   # 红色
 INFO_COLOR='\033[1;36m'    # 青色
 MENU_COLOR='\033[1;34m'    # 蓝色
+NC='\033[0m'               # 无颜色
+
+# 显示横幅
+echo -e "${MENU_COLOR}${BOLD}==============================================${NORMAL}"
+echo -e "${MENU_COLOR}${BOLD}      联盟游戏 Docker 安装脚本 v2.0            ${NORMAL}"
+echo -e "${MENU_COLOR}${BOLD}      由 Node Farmer 和 Juliwicks 提供         ${NORMAL}"
+echo -e "${MENU_COLOR}${BOLD}==============================================${NC}"
 
 # 自定义状态显示函数
 show_message() {
@@ -35,33 +42,33 @@ get_non_empty_input() {
     while [ -z "$input" ]; do
         read -p "$prompt" input
         if [ -z "$input" ]; then
-            show_message "此字段不能为空。" "error"
+            show_message "此字段不能为空，请重新输入。" "error"
         fi
     done
     echo "$input"
 }
 
-# 生成随机 MAC 地址的函数
+# 生成随机 MAC 地址
 generate_mac_address() {
     echo "02:$(od -An -N5 -tx1 /dev/urandom | tr ' ' ':' | cut -c2-)"
 }
 
-# 生成新的虚拟产品 UUID 的函数
+# 生成虚拟 UUID
 generate_uuid() {
     cat /proc/sys/kernel/random/uuid
 }
 
-# 获取并验证参数
+# 获取设备名称
 device_name=$(get_non_empty_input "请输入设备名称：")
 
-# 为设备创建配置目录
+# 创建设备目录
 device_dir="./$device_name"
 if [ ! -d "$device_dir" ]; then
     mkdir "$device_dir"
     show_message "已为设备 '$device_name' 创建目录：$device_dir" "info"
 fi
 
-# 代理配置
+# 询问是否使用代理
 read -p "是否使用代理？(Y/N): " use_proxy
 
 proxy_type=""
@@ -70,6 +77,7 @@ proxy_port=""
 proxy_username=""
 proxy_password=""
 
+# 如果选择使用代理，则获取代理信息
 if [[ "$use_proxy" == "Y" || "$use_proxy" == "y" ]]; then
     read -p "请输入代理类型 (http/socks5): " proxy_type
     read -p "请输入代理 IP: " proxy_ip
@@ -83,7 +91,7 @@ fi
 
 # 创建 Dockerfile
 show_message "正在创建 Dockerfile..." "info"
-cat << 'EOL' > "$device_dir/Dockerfile"
+cat <<EOL > "$device_dir/Dockerfile"
 FROM ubuntu:latest
 WORKDIR /app
 RUN apt-get update && apt-get install -y bash curl jq make gcc bzip2 lbzip2 vim git lz4 telnet build-essential net-tools wget tcpdump systemd dbus redsocks iptables iproute2 nano
@@ -92,6 +100,7 @@ RUN curl -L https://github.com/Impa-Ventures/coa-launch-binaries/raw/main/linux/
 RUN chmod +x ./launcher && chmod +x ./worker
 EOL
 
+# 如果使用代理，追加 redsocks 配置和 entrypoint 脚本
 if [[ "$use_proxy" == "Y" || "$use_proxy" == "y" ]]; then
     cat <<EOL >> "$device_dir/Dockerfile"
 COPY redsocks.conf /etc/redsocks.conf
@@ -99,13 +108,47 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 EOL
-fi
 
-cat <<EOL >> "$device_dir/Dockerfile"
-CMD ["/bin/bash", "-c", "exec /bin/bash"]
+    # 创建 redsocks 配置文件
+    cat <<EOL > "$device_dir/redsocks.conf"
+base {
+    log_debug = off;
+    log_info = on;
+    log = "file:/var/log/redsocks.log";
+    daemon = on;
+    redirector = iptables;
+}
+
+redsocks {
+    local_ip = 127.0.0.1;
+    local_port = 12345;
+    ip = $proxy_ip;
+    port = $proxy_port;
+    type = $proxy_type;
 EOL
 
-# 生成虚拟 UUID 并存入文件
+    if [[ -n "$proxy_username" ]]; then
+        echo "    login = \"$proxy_username\";" >> "$device_dir/redsocks.conf"
+    fi
+
+    if [[ -n "$proxy_password" ]]; then
+        echo "    password = \"$proxy_password\";" >> "$device_dir/redsocks.conf"
+    fi
+
+    echo "}" >> "$device_dir/redsocks.conf"
+
+    # 创建 entrypoint.sh
+    cat <<EOL > "$device_dir/entrypoint.sh"
+#!/bin/sh
+redsocks -c /etc/redsocks.conf &
+sleep 5
+iptables -t nat -A OUTPUT -p tcp --dport 80 -j REDIRECT --to-ports 12345
+iptables -t nat -A OUTPUT -p tcp --dport 443 -j REDIRECT --to-ports 12345
+exec "\$@"
+EOL
+fi
+
+# 生成虚拟 UUID
 fake_product_uuid_file="$device_dir/fake_uuid.txt"
 if [ ! -f "$fake_product_uuid_file" ]; then
     generated_uuid=$(generate_uuid)
@@ -113,19 +156,18 @@ if [ ! -f "$fake_product_uuid_file" ]; then
     show_message "生成的虚拟 UUID: $generated_uuid" "info"
 fi
 
-# 使用随机 MAC 地址
+# 生成随机 MAC 地址
 mac_address=$(generate_mac_address)
 show_message "生成的 MAC 地址：$mac_address" "info"
 
+# 将设备名称转换为小写
 device_name_lower=$(echo "$device_name" | tr '[:upper:]' '[:lower:]')
 
 # 构建 Docker 镜像
 show_message "正在构建 Docker 镜像 '$device_name_lower'..." "info"
 docker build -t "$device_name_lower" "$device_dir"
 
-# 打印成功消息和下一步提示
+# 显示成功消息并提示用户下一步操作
 show_message "容器 '${device_name}' 已成功设置。" "success"
-show_message "现在请在终端输入以下命令来启动容器：" "info"
-echo -e "${MENU_COLOR}docker run -it --mac-address=\"$mac_address\" \\
--v \"$fake_product_uuid_file:/sys/class/dmi/id/product_uuid\" \\
---name=\"$device_name\" \"$device_name_lower\"${NORMAL}"
+show_message "请在终端输入以下命令以启动容器：" "info"
+echo -e "${MENU_COLOR}docker run -it --mac-address=\"$mac_address\" -v \"$fake_product_uuid_file:/sys/class/dmi/id/product_uuid\" --name=\"$device_name\" \"$device_name_lower\"${NC}"
