@@ -7,12 +7,18 @@
 ![image](https://github.com/user-attachments/assets/dbbfc6a5-d19e-4b63-a5c5-5140286d5f2e)
 
 输入个名字列入zq1  点下一步
+
 ![image](https://github.com/user-attachments/assets/215b13ca-b532-4d6b-bc38-7d35a65ee61b)
+
 这里需要用到，先别关闭
+
 ![image](https://github.com/user-attachments/assets/747b8677-2d6d-42fa-b852-e53c86dc6f47)
 
 使用下面命令输入在服务器终端
+
 curl -k -O https://raw.githubusercontent.com/ziqing888/alliance-games/main/alliance-games.sh && chmod +x alliance-games.sh && ./alliance-games.sh
+
+
 依次输入设备名称，保持和网站一致就行，没有代理的选NO  箭头所指方向根据提示去网站复粘贴
 
 ![image](https://github.com/user-attachments/assets/71153232-f406-46ad-b4df-6fe80be835d6)
