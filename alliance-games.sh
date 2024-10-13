@@ -12,7 +12,7 @@ NC='\033[0m'               # 无颜色
 # 显示横幅
 echo -e "${MENU_COLOR}${BOLD}==============================================${NORMAL}"
 echo -e "${MENU_COLOR}${BOLD}      联盟游戏 Docker 安装脚本 v2.0            ${NORMAL}"
-echo -e "${MENU_COLOR}${BOLD}      由 Node Farmer 和 Juliwicks 提供         ${NORMAL}"
+echo -e "${MENU_COLOR}${BOLD}      由 子清 提供         ${NORMAL}"
 echo -e "${MENU_COLOR}${BOLD}==============================================${NC}"
 
 # 自定义状态显示函数
