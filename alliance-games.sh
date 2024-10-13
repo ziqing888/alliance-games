@@ -174,7 +174,11 @@ show_message "容器 '${device_name}' 已成功设置。" "success"
 
 # 运行 Docker 容器
 if [[ "$use_proxy" == "Y" || "$use_proxy" == "y" ]]; then
-    docker run -it --cap-add=NET_ADMIN --mac-address="$mac_address" -v "$fake_product_uuid_file:/sys/class/dmi/id/product_uuid" --name="$device_name" "$device_name_lower"
+    docker run -it --cap-add=NET_ADMIN --mac-address="$mac_address" \
+    -v "$fake_product_uuid_file:/sys/class/dmi/id/product_uuid" \
+    --name="$device_name" "$device_name_lower"
 else
-    docker run -it --mac-address="$mac_address" -v "$fake_product_uuid_file:/sys/class/dmi/id/product_uuid" --name="$device_name" "$device_name_lower"
+    docker run -it --mac-address="$mac_address" \
+    -v "$fake_product_uuid_file:/sys/class/dmi/id/product_uuid" \
+    --name="$device_name" "$device_name_lower"
 fi
