@@ -160,12 +160,16 @@ docker build -t "$device_name_lower" "$device_dir"
 
 echo -e "${SUCCESS}[SUCCESS] Docker 容器 '$device_name' 已成功设置并生成伪造的 UUID。${NC}"
 
+# 提示用户粘贴第三条命令
+echo -e "${INFO}[INFO] 现在将 AG 设备初始化板上的第 3 条命令复制并粘贴到以下命令提示符中...${NC}"
+
 if [[ "$use_proxy" == "Y" || "$use_proxy" == "y" ]]; then
     docker run -it --cap-add=NET_ADMIN --mac-address="$mac_address" \
         -v "$fake_product_uuid_file:/sys/class/dmi/id/product_uuid" \
-        --name="$device_name" "$device_name_lower"
+        --name="$device_name" "$device_name_lower" /bin/bash
 else
     docker run -it --mac-address="$mac_address" \
         -v "$fake_product_uuid_file:/sys/class/dmi/id/product_uuid" \
-        --name="$device_name" "$device_name_lower"
+        --name="$device_name" "$device_name_lower" /bin/bash
 fi
+
